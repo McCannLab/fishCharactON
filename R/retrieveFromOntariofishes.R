@@ -1,10 +1,10 @@
-library(tidyverse)
-library(taxize)
+source("R/zzz.R")
 
-## First - simple webscrapping
+## 1- Webscrapping http://www.ontariofishes.ca
 ls_data <- list()
-for (i in 1:159) {
-  print(i)
+n <- 159
+for (i in 1:n) {
+  cat_pb(i, n)
   tmp <- readLines(paste0("http://www.ontariofishes.ca/fish_detail.php?FID=", i))
   ls_data[[i]] <- cbind(
     tmp[grepl("DataLabel", tmp)] %>% gsub(".*LEFT>", "", .) %>%
@@ -15,8 +15,11 @@ for (i in 1:159) {
     )
 }
 
-df <- ls_data %>% lapply(function(x) x[,2]) %>% do.call(rbind, .) %>%
-  as.data.frame
+## 2- Clean up
+df <- ls_data %>%
+  lapply(function(x) x[,2]) %>%
+  do.call(rbind, .) %>%
+  as.data.frame(stringsAsFactors = FALSE)
 
 ## Columns names
 names(df) <- gsub(ls_data[[1]][,1], pattern = " ", replacement = "_") %>%
@@ -29,7 +32,8 @@ names(df) <- gsub(ls_data[[1]][,1], pattern = " ", replacement = "_") %>%
 df$Family <- strsplit(df$Family, " - ") %>% lapply(function(x) x[2]) %>% unlist
 names(df)
 
-## retrive classification form itis
+
+## 3- Retrieve classification form itis database
 res <- list()
 df0 <- data.frame(
   class = NA, order = NA, family = NA, genus = NA, species = NA
@@ -61,7 +65,7 @@ df$Species_TSN2[wsp(nm)] <- tsn
 
 nm <- c("class", "order", "family", "genus", "species")
 for (i in 1:nrow(df)) {
-  print(i)
+  cat_pb(i, nrow(df))
   res[[i]] <- df0
   if (df$Species_TSN2[i] != "not applicable") {
     tmp <- classification(df$Species_TSN2[i], db = "itis")
@@ -69,9 +73,10 @@ for (i in 1:nrow(df)) {
     res[[i]][1,] <- tmp[[1]]$name[id]
   }
 }
+cat("\n")
 ##
 info_itis <- do.call(rbind, res)
 names(info_itis) <- paste0(names(info_itis), "_itis")
 out <- cbind(df, info_itis)
-
-write.csv(df, "output/ontariofishes_raw.csv")
+names(out)[1] <- "Common_Family"
+write.csv(out[c(2:5, 1, 6:44)], "output/ontariofishes_raw.csv")
